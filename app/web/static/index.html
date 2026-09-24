@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Post Button Controller</title>
+  <!-- Telegram WebApp SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <!-- SortableJS for smooth drag & drop -->
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+  <style>
+    body {
+      background-color: var(--tg-theme-bg-color, #0f172a);
+      color: var(--tg-theme-text-color, #f8fafc);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      touch-action: manipulation;
+    }
+    .card-glass {
+      background: rgba(30, 41, 59, 0.7);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .sortable-ghost {
+      opacity: 0.3;
+      transform: scale(0.98);
+      background: #3b82f6 !important;
+    }
+    .telegram-btn {
+      background: #2b5278;
+      transition: all 0.15s ease;
+    }
+    .telegram-btn:hover {
+      background: #366596;
+    }
+  </style>
+</head>
+<body class="min-h-screen pb-16 antialiased select-none">
+  <!-- Top App Bar -->
+  <header class="sticky top-0 z-40 card-glass border-b border-slate-700/50 px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center space-x-2">
+      <div class="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold shadow-md shadow-blue-500/20">
+        <i class="fa-solid fa-bolt"></i>
+      </div>
+      <div>
+        <h1 class="font-bold text-base tracking-tight leading-none text-white">Button Manager</h1>
+        <span id="conn-badge" class="text-xs text-emerald-400 font-medium">● Connected</span>
+      </div>
+    </div>
+    <button onclick="refreshData()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-300 hover:text-white flex items-center justify-center active:rotate-180 transition-all duration-300">
+      <i class="fa-solid fa-arrows-rotate text-sm"></i>
+    </button>
+  </header>
+
+  <main class="max-w-md mx-auto px-4 pt-4 space-y-4">
+    <!-- Channel Selector Pill Tabs -->
+    <div>
+      <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Selected Channel / Group</label>
+      <div id="channel-tabs" class="flex space-x-2 overflow-x-auto pb-1 scrollbar-none">
+        <!-- Rendered dynamically -->
+        <div class="animate-pulse bg-slate-800 h-9 rounded-xl w-36"></div>
+      </div>
+    </div>
+
+    <!-- Active Channel Control Card -->
+    <div id="channel-card" class="card-glass rounded-2xl p-4 shadow-xl relative overflow-hidden">
+      <div class="flex items-start justify-between">
+        <div>
+          <h2 id="channel-title" class="font-bold text-lg text-white">Loading...</h2>
+          <p id="channel-user" class="text-xs text-slate-400">@...</p>
+        </div>
+        <div class="flex items-center space-x-2">
+          <button id="toggle-layout-btn" onclick="toggleLayout()" class="px-2.5 py-1 text-xs font-medium rounded-lg bg-slate-800 text-slate-300 border border-slate-700">
+            <i class="fa-solid fa-table-columns mr-1"></i> <span id="layout-label">1-Col</span>
+          </button>
+          <button id="toggle-auto-btn" onclick="toggleChannelAuto()" class="px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+            Auto-Post: ON
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Buttons Section Header -->
+    <div class="flex items-center justify-between pt-1">
+      <div>
+        <h3 class="text-sm font-bold uppercase tracking-wider text-slate-200">Interactive Buttons</h3>
+        <p class="text-xs text-slate-400">Drag <i class="fa-solid fa-grip-vertical text-slate-500 mx-0.5"></i> to reorder buttons</p>
+      </div>
+      <button onclick="openAddModal()" class="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs shadow-lg shadow-blue-500/25 flex items-center space-x-1.5 active:scale-95 transition-all">
+        <i class="fa-solid fa-plus"></i>
+        <span>Add Button</span>
+      </button>
+    </div>
+
+    <!-- Sortable Buttons List -->
+    <div id="buttons-list" class="space-y-2 min-h-[80px]">
+      <!-- Dynamically filled -->
+      <div class="text-center py-8 text-slate-500 text-sm">
+        <i class="fa-solid fa-spinner fa-spin text-xl mb-2"></i>
+        <p>Loading buttons...</p>
+      </div>
+    </div>
+
+    <!-- Danger Zone: Clear All Buttons -->
+    <div id="clear-container" class="pt-2 hidden">
+      <button onclick="clearAllButtons()" class="w-full py-2 px-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 text-xs font-medium flex items-center justify-center space-x-1.5 active:scale-98 transition">
+        <i class="fa-solid fa-trash-can"></i>
+        <span>Delete All Buttons for this Channel</span>
+      </button>
+    </div>
+
+    <!-- Live Post Preview Card -->
+    <div class="card-glass rounded-2xl p-4 shadow-xl border border-slate-700/60 mt-4">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">
+          <i class="fa-solid fa-eye text-blue-400 mr-1"></i> Live Telegram Post Preview
+        </span>
+        <span class="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full">Real-time</span>
+      </div>
+
+      <!-- Telegram Message Bubble -->
+      <div class="bg-[#182533] rounded-xl p-3 text-sm text-slate-100 shadow-inner border border-slate-700/40">
+        <div class="flex items-center space-x-2 mb-2 pb-1.5 border-b border-slate-700/50">
+          <div class="w-6 h-6 rounded-full bg-blue-500 text-[10px] flex items-center justify-center font-bold text-white">TG</div>
+          <div class="leading-none">
+            <span id="preview-author" class="font-bold text-xs text-blue-400">Channel Name</span>
+            <span class="text-[10px] text-slate-400 ml-1">12:00 PM</span>
+          </div>
+        </div>
+        <p class="text-xs text-slate-200 leading-relaxed mb-3">
+          ✨ <b>Sample Channel Post</b><br />
+          This is an example post to show exactly how your inline buttons look attached underneath new posts!
+        </p>
+        
+        <!-- Live Attached Keyboard in Preview -->
+        <div id="preview-keyboard" class="space-y-1.5 pt-1">
+          <!-- Dynamically updated -->
+          <div class="text-center py-2 text-slate-500 text-xs italic">No active buttons configured</div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Add / Edit Modal -->
+  <div id="btn-modal" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="card-glass bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-sm p-5 space-y-4 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 id="modal-title" class="font-bold text-base text-white">Add New Button</h3>
+        <button onclick="closeModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <div class="space-y-3 text-left">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Emoji (Optional)</label>
+          <div class="flex space-x-1.5 mb-2 overflow-x-auto py-1 scrollbar-none">
+            <button onclick="setEmoji('📢')" class="px-2 py-1 rounded bg-slate-800 text-sm hover:bg-slate-700">📢</button>
+            <button onclick="setEmoji('✝️')" class="px-2 py-1 rounded bg-slate-800 text-sm hover:bg-slate-700">✝️</button>
+            <button onclick="setEmoji('📚')" class="px-2 py-1 rounded bg-slate-800 text-sm hover:bg-slate-700">📚</button>
+            <button onclick="setEmoji('📺')" class="px-2 py-1 rounded bg-slate-800 text-sm hover:bg-slate-700">📺</button>
+            <button onclick="setEmoji('🌐')" class="px-2 py-1 rounded bg-slate-800 text-sm hover:bg-slate-700">🌐</button>
+            <button onclick="setEmoji('💬')" class="px-2 py-1 rounded bg-slate-800 text-sm hover:bg-slate-700">💬</button>
+            <button onclick="setEmoji('💖')" class="px-2 py-1 rounded bg-slate-800 text-sm hover:bg-slate-700">💖</button>
+            <button onclick="setEmoji('🤖')" class="px-2 py-1 rounded bg-slate-800 text-sm hover:bg-slate-700">🤖</button>
+          </div>
+          <input type="text" id="modal-emoji" placeholder="e.g. ✝️ or 📢" class="w-full bg-slate-800/80 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Button Label (Text) *</label>
+          <input type="text" id="modal-label" placeholder="e.g. የኦርቶዶክስ ትምህርት or YouTube" class="w-full bg-slate-800/80 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Target Link (URL) *</label>
+          <input type="url" id="modal-url" placeholder="https://t.me/... or https://..." class="w-full bg-slate-800/80 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-2 pt-2">
+        <button onclick="closeModal()" class="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium">Cancel</button>
+        <button onclick="saveButton()" id="save-btn" class="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-lg shadow-blue-500/25">Save Button</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Initialize Telegram WebApp
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+      tg.ready();
+      tg.expand();
+      if (tg.setHeaderColor) tg.setHeaderColor('#0f172a');
+      if (tg.setBackgroundColor) tg.setBackgroundColor('#0f172a');
+    }
+
+    function haptic(type = 'impact', style = 'light') {
+      try {
+        if (tg?.HapticFeedback) {
+          if (type === 'impact') tg.HapticFeedback.impactOccurred(style);
+          if (type === 'notification') tg.HapticFeedback.notificationOccurred(style);
+        }
+      } catch (e) {}
+    }
+
+    let channels = [];
+    let currentChannelId = null;
+    let currentButtons = [];
+    let editingButtonId = null;
+    let sortableInstance = null;
+
+    async function loadData() {
+      try {
+        const res = await fetch('/api/channels');
+        channels = await res.json();
+        renderChannelTabs();
+        if (channels.length > 0) {
+          if (!currentChannelId || !channels.some(c => c.id === currentChannelId)) {
+            currentChannelId = channels[0].id;
+          }
+          await selectChannel(currentChannelId);
+        } else {
+          document.getElementById('channel-title').innerText = "No Channels Added";
+          document.getElementById('channel-user').innerText = "Add bot as Admin in your channel first!";
+          document.getElementById('buttons-list').innerHTML = '<div class="text-center py-8 text-slate-500 text-xs">No channels found. Use bot chat to add a channel.</div>';
+        }
+      } catch (err) {
+        console.error("Load error:", err);
+      }
+    }
+
+    function renderChannelTabs() {
+      const container = document.getElementById('channel-tabs');
+      container.innerHTML = channels.map(c => `
+        <button onclick="selectChannel(${c.id})" class="px-3.5 py-1.5 rounded-xl font-medium text-xs whitespace-nowrap transition-all ${
+          c.id === currentChannelId 
+            ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25 font-bold' 
+            : 'bg-slate-800 text-slate-400 hover:text-white'
+        }">
+          📢 ${c.title || ('Channel ' + c.id)}
+        </button>
+      `).join('');
+    }
+
+    async function selectChannel(id) {
+      currentChannelId = id;
+      haptic('impact', 'light');
+      renderChannelTabs();
+      const channel = channels.find(c => c.id === id);
+      if (!channel) return;
+
+      document.getElementById('channel-title').innerText = channel.title || 'Untitled';
+      document.getElementById('channel-user').innerText = channel.username || ('ID: ' + channel.chat_id);
+      document.getElementById('preview-author').innerText = channel.title || 'Channel';
+      
+      const layoutLabel = document.getElementById('layout-label');
+      layoutLabel.innerText = channel.layout_mode === 'horizontal_2col' ? '2-Cols' : '1-Col';
+
+      const autoBtn = document.getElementById('toggle-auto-btn');
+      if (channel.automation_enabled) {
+        autoBtn.className = "px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
+        autoBtn.innerText = "Auto-Post: ON";
+      } else {
+        autoBtn.className = "px-2.5 py-1 text-xs font-bold rounded-lg bg-rose-500/20 text-rose-400 border border-rose-500/30";
+        autoBtn.innerText = "Auto-Post: OFF";
+      }
+
+      await loadButtons(id);
+    }
+
+    async function toggleLayout() {
+      const channel = channels.find(c => c.id === currentChannelId);
+      if (!channel) return;
+      const newMode = channel.layout_mode === 'horizontal_2col' ? 'vertical' : 'horizontal_2col';
+      haptic('impact', 'medium');
+      await fetch(`/api/channels/${currentChannelId}/toggle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target: 'layout', mode: newMode })
+      });
+      channel.layout_mode = newMode;
+      document.getElementById('layout-label').innerText = newMode === 'horizontal_2col' ? '2-Cols' : '1-Col';
+      renderLivePreview();
+    }
+
+    async function toggleChannelAuto() {
+      const channel = channels.find(c => c.id === currentChannelId);
+      if (!channel) return;
+      haptic('impact', 'medium');
+      const res = await fetch(`/api/channels/${currentChannelId}/toggle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target: 'automation' })
+      });
+      const data = await res.json();
+      channel.automation_enabled = data.automation_enabled;
+      selectChannel(currentChannelId);
+    }
+
+    async function loadButtons(destId) {
+      try {
+        const res = await fetch(`/api/channels/${destId}/buttons`);
+        currentButtons = await res.json();
+        renderButtonsList();
+        renderLivePreview();
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function renderButtonsList() {
+      const listEl = document.getElementById('buttons-list');
+      const clearCont = document.getElementById('clear-container');
+
+      if (currentButtons.length === 0) {
+        listEl.innerHTML = `
+          <div class="card-glass rounded-xl p-6 text-center text-slate-400 text-xs border border-dashed border-slate-700">
+            <i class="fa-solid fa-shapes text-2xl text-slate-500 mb-2"></i>
+            <p class="font-medium text-slate-300">No Buttons Configured</p>
+            <p class="mt-0.5 text-slate-500">Tap "Add Button" above to create your custom buttons.</p>
+          </div>
+        `;
+        clearCont.classList.add('hidden');
+        return;
+      }
+
+      clearCont.classList.remove('hidden');
+
+      listEl.innerHTML = currentButtons.map((btn, idx) => `
+        <div data-id="${btn.id}" class="btn-card card-glass rounded-xl p-3 flex items-center justify-between border border-slate-700/50 hover:border-slate-600 transition shadow-sm">
+          <div class="flex items-center space-x-3 overflow-hidden">
+            <div class="drag-handle cursor-grab active:cursor-grabbing text-slate-500 hover:text-slate-300 p-1">
+              <i class="fa-solid fa-grip-vertical"></i>
+            </div>
+            <div class="truncate">
+              <div class="flex items-center space-x-1.5">
+                <span class="text-sm font-bold text-white truncate">${btn.display_text}</span>
+              </div>
+              <p class="text-[11px] text-slate-400 truncate">${btn.url}</p>
+            </div>
+          </div>
+          <div class="flex items-center space-x-1 shrink-0 ml-2">
+            <button onclick="openEditModal(${btn.id})" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-blue-400 flex items-center justify-center active:scale-90 transition">
+              <i class="fa-solid fa-pen text-xs"></i>
+            </button>
+            <button onclick="deleteButton(${btn.id})" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-rose-400 flex items-center justify-center active:scale-90 transition">
+              <i class="fa-solid fa-trash text-xs"></i>
+            </button>
+          </div>
+        </div>
+      `).join('');
+
+      initDragAndDrop();
+    }
+
+    function initDragAndDrop() {
+      const el = document.getElementById('buttons-list');
+      if (sortableInstance) sortableInstance.destroy();
+      sortableInstance = new Sortable(el, {
+        handle: '.drag-handle',
+        animation: 180,
+        ghostClass: 'sortable-ghost',
+        onEnd: async function () {
+          haptic('impact', 'medium');
+          const newIds = Array.from(el.querySelectorAll('.btn-card')).map(card => parseInt(card.getAttribute('data-id')));
+          // Update order in local memory
+          currentButtons.sort((a, b) => newIds.indexOf(a.id) - newIds.indexOf(b.id));
+          renderLivePreview();
+          // Send to server
+          await fetch(`/api/channels/${currentChannelId}/buttons/reorder`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ button_ids: newIds })
+          });
+        }
+      });
+    }
+
+    function renderLivePreview() {
+      const previewEl = document.getElementById('preview-keyboard');
+      const channel = channels.find(c => c.id === currentChannelId);
+      const is2Col = channel && channel.layout_mode === 'horizontal_2col';
+
+      if (currentButtons.length === 0) {
+        previewEl.innerHTML = '<div class="text-center py-2 text-slate-500 text-xs italic">No buttons attached</div>';
+        return;
+      }
+
+      if (is2Col) {
+        let rowsHtml = '';
+        for (let i = 0; i < currentButtons.length; i += 2) {
+          const b1 = currentButtons[i];
+          const b2 = currentButtons[i + 1];
+          rowsHtml += `
+            <div class="grid grid-cols-2 gap-1.5">
+              <div class="telegram-btn text-white py-1.5 px-2 rounded-lg text-center font-medium text-xs truncate shadow">
+                ${b1.display_text}
+              </div>
+              ${b2 ? `
+              <div class="telegram-btn text-white py-1.5 px-2 rounded-lg text-center font-medium text-xs truncate shadow">
+                ${b2.display_text}
+              </div>` : '<div></div>'}
+            </div>
+          `;
+        }
+        previewEl.innerHTML = rowsHtml;
+      } else {
+        previewEl.innerHTML = currentButtons.map(b => `
+          <div class="telegram-btn text-white py-2 px-3 rounded-lg text-center font-medium text-xs truncate shadow">
+            ${b.display_text}
+          </div>
+        `).join('');
+      }
+    }
+
+    function openAddModal() {
+      editingButtonId = null;
+      document.getElementById('modal-title').innerText = "Add New Button";
+      document.getElementById('modal-emoji').value = "";
+      document.getElementById('modal-label').value = "";
+      document.getElementById('modal-url').value = "";
+      document.getElementById('btn-modal').classList.remove('hidden');
+      haptic('impact', 'light');
+    }
+
+    function openEditModal(id) {
+      const btn = currentButtons.find(b => b.id === id);
+      if (!btn) return;
+      editingButtonId = id;
+      document.getElementById('modal-title').innerText = "Edit Button";
+      document.getElementById('modal-emoji').value = btn.emoji || "";
+      document.getElementById('modal-label').value = btn.label || "";
+      document.getElementById('modal-url').value = btn.url || "";
+      document.getElementById('btn-modal').classList.remove('hidden');
+      haptic('impact', 'light');
+    }
+
+    function closeModal() {
+      document.getElementById('btn-modal').classList.add('hidden');
+    }
+
+    function setEmoji(emoji) {
+      document.getElementById('modal-emoji').value = emoji;
+      haptic('impact', 'light');
+    }
+
+    async function saveButton() {
+      const label = document.getElementById('modal-label').value.trim();
+      const url = document.getElementById('modal-url').value.trim();
+      const emoji = document.getElementById('modal-emoji').value.trim();
+
+      if (!label) {
+        alert("Please enter a button label text.");
+        return;
+      }
+      if (!url || !url.startsWith("http")) {
+        alert("Please enter a valid link starting with http:// or https:// (e.g. https://t.me/...)");
+        return;
+      }
+
+      haptic('impact', 'heavy');
+
+      if (editingButtonId) {
+        await fetch(`/api/buttons/${editingButtonId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ label, url, emoji })
+        });
+      } else {
+        await fetch(`/api/channels/${currentChannelId}/buttons`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ label, url, emoji })
+        });
+      }
+
+      closeModal();
+      await loadButtons(currentChannelId);
+      haptic('notification', 'success');
+    }
+
+    async function deleteButton(id) {
+      if (!confirm("Delete this button?")) return;
+      haptic('impact', 'medium');
+      await fetch(`/api/buttons/${id}`, { method: 'DELETE' });
+      await loadButtons(currentChannelId);
+      haptic('notification', 'success');
+    }
+
+    async function clearAllButtons() {
+      if (!confirm("Are you sure you want to delete ALL buttons for this channel?")) return;
+      haptic('impact', 'heavy');
+      await fetch(`/api/channels/${currentChannelId}/buttons/clear`, { method: 'POST' });
+      await loadButtons(currentChannelId);
+      haptic('notification', 'success');
+    }
+
+    function refreshData() {
+      haptic('impact', 'light');
+      loadData();
+    }
+
+    // Initial load
+    loadData();
+  </script>
+</body>
+</html>

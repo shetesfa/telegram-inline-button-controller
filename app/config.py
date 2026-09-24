@@ -26,6 +26,13 @@ class Config:
         self.LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO").upper().strip()
         self.APP_ENV: str = os.getenv("APP_ENV", "development").lower().strip()
 
+        # WebApp public URL for Telegram Mini App
+        self.WEBAPP_URL: str = os.getenv("WEBAPP_URL", "").strip()
+        if not self.WEBAPP_URL:
+            render_url = os.getenv("RENDER_EXTERNAL_URL", "").strip()
+            if render_url:
+                self.WEBAPP_URL = render_url
+
         # Parse admin IDs from comma-separated list
         admin_ids_raw: str = os.getenv("ADMIN_IDS", "").strip()
         self.ADMIN_IDS: Set[int] = set()

@@ -1,7 +1,8 @@
 """Inline keyboard generators for Controller Bot menus and navigation."""
 
 from typing import List, Optional
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from app.config import config
 from app.database.models import Button, Destination
 from app.utils.helpers import truncate_text
 
@@ -9,7 +10,16 @@ from app.utils.helpers import truncate_text
 def main_menu_kb(global_automation_on: bool) -> InlineKeyboardMarkup:
     """Generate the main controller dashboard keyboard."""
     auto_text = "🟢 Automation: ON" if global_automation_on else "🔴 Automation: OFF"
-    keyboard = [
+    keyboard = []
+
+    # If WEBAPP_URL is configured or running on Render, add prominent Mini App button
+    if config.WEBAPP_URL:
+        target_url = f"{config.WEBAPP_URL.rstrip('/')}/webapp"
+        keyboard.append(
+            [InlineKeyboardButton("🌐 Open Web Dashboard 🚀", web_app=WebAppInfo(url=target_url))]
+        )
+
+    keyboard.extend([
         [
             InlineKeyboardButton("📢 Channels", callback_data="menu:channels"),
             InlineKeyboardButton("👥 Groups", callback_data="menu:groups"),
@@ -24,7 +34,7 @@ def main_menu_kb(global_automation_on: bool) -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton("🛠 System Status", callback_data="menu:status"),
         ],
-    ]
+    ])
     return InlineKeyboardMarkup(keyboard)
 
 
@@ -62,7 +72,14 @@ def destination_detail_kb(dest: Destination) -> InlineKeyboardMarkup:
 
     back_target = "menu:channels" if dest.chat_type == "channel" else "menu:groups"
 
-    keyboard = [
+    keyboard = []
+    if config.WEBAPP_URL:
+        target_url = f"{config.WEBAPP_URL.rstrip('/')}/webapp"
+        keyboard.append(
+            [InlineKeyboardButton("🌐 Open Visual Mini App 🚀", web_app=WebAppInfo(url=target_url))]
+        )
+
+    keyboard.extend([
         [
             InlineKeyboardButton(
                 "🔘 Manage Buttons", callback_data=f"buttons:dest:{dest.id}"

@@ -123,23 +123,18 @@ async def print_startup_banner() -> None:
     logger.info(banner)
 
 
-async def start_health_server(port: int):
-    """Lightweight HTTP health check server for cloud platforms (Render, Railway, Fly.io)."""
-    async def handle_client(reader, writer):
-        try:
-            await reader.read(1024)
-            response = b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK"
-            writer.write(response)
-            await writer.drain()
-        except Exception:
-            pass
-        finally:
-            writer.close()
-            await writer.wait_closed()
+async def start_web_server(port: int):
+    """Start full aiohttp Web server serving Telegram Mini App and REST API."""
+    from aiohttp import web
+    from app.web.webapp import create_web_app
 
-    server = await asyncio.start_server(handle_client, "0.0.0.0", port)
-    logger.info(f"Health check HTTP server listening on port {port} (Render ready)")
-    return server
+    webapp = create_web_app()
+    runner = web.AppRunner(webapp)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    logger.info(f"Telegram Mini App & REST API listening on port {port} (Render ready)")
+    return runner
 
 
 async def run_bot_async() -> None:
@@ -162,14 +157,14 @@ async def run_bot_async() -> None:
 
     await print_startup_banner()
 
-    # Start health server if PORT is set (Render Web Service)
+    # Start web server if PORT is set (Render Web Service or local test)
     port_env = os.environ.get("PORT")
-    health_server = None
+    web_runner = None
     if port_env:
         try:
-            health_server = await start_health_server(int(port_env))
+            web_runner = await start_web_server(int(port_env))
         except Exception as e:
-            logger.warning(f"Could not bind health server to port {port_env}: {e}")
+            logger.warning(f"Could not bind web server to port {port_env}: {e}")
 
     # Start receiving updates via long polling
     await app.updater.start_polling(
@@ -189,9 +184,8 @@ async def run_bot_async() -> None:
         logger.info("Shutdown signal received...")
     finally:
         logger.info("Stopping Telegram updater...")
-        if health_server:
-            health_server.close()
-            await health_server.wait_closed()
+        if web_runner:
+            await web_runner.cleanup()
         if app.updater.running:
             await app.updater.stop()
         if app.running:
