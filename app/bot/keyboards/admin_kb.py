@@ -110,7 +110,7 @@ def destination_detail_kb(dest: Destination) -> InlineKeyboardMarkup:
             InlineKeyboardButton("⬅️ Back", callback_data=back_target),
             InlineKeyboardButton("🏠 Home", callback_data="menu:home"),
         ],
-    ]
+    ])
     return InlineKeyboardMarkup(keyboard)
 
 
